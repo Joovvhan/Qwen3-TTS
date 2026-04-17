@@ -1,8 +1,14 @@
+# Python
 __pycache__/
 *.py[cod]
 *$py.class
 *.so
 .Python
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Build / dist
 build/
 develop-eggs/
 dist/
@@ -15,10 +21,19 @@ parts/
 sdist/
 var/
 wheels/
-*.egg-info/
-.installed.cfg
-*.egg
-.idea/
-.vscode/
+
+# Virtual environments
 venv/
 env/
+.venv/
+
+# uv
+uv.lock
+
+# IDE / tools
+.idea/
+.vscode/
+.claude/
+
+# Test outputs
+qwen3_tts_test_voice_clone_output_wav/

@@ -1,20 +1,16 @@
 [build-system]
-requires = ["setuptools>=68", "wheel"]
-build-backend = "setuptools.build_meta"
+requires = ["hatchling"]
+build-backend = "hatchling.build"
 
 [project]
 name = "qwen-tts"
 version = "0.1.1"
 description = "Qwen-TTS python package"
 readme = "README.md"
-requires-python = ">=3.9"
+requires-python = ">=3.12"
 classifiers = [
   "Programming Language :: Python :: 3",
-  "Programming Language :: Python :: 3.9",
-  "Programming Language :: Python :: 3.10",
-  "Programming Language :: Python :: 3.11",
   "Programming Language :: Python :: 3.12",
-  "Programming Language :: Python :: 3.13",
 ]
 license = { text = "Apache-2.0" }
 authors = [{ name = "Alibaba Qwen Team" }]
@@ -24,7 +20,8 @@ dependencies = [
   "accelerate==1.12.0",
   "gradio",
   "librosa",
-  "torchaudio",
+  "torch==2.11.0",
+  "torchaudio==2.11.0",
   "soundfile",
   "sox",
   "onnxruntime",
@@ -38,9 +35,18 @@ Repository = "https://github.com/Qwen/Qwen3-TTS"
 [project.scripts]
 qwen-tts-demo = "qwen_tts.cli.demo:main"
 
-[tool.setuptools]
-packages = { find = { where = ["."] , include = ["qwen_tts*"] } }
-include-package-data = true
+[tool.hatch.build.targets.wheel]
+packages = ["qwen_tts"]
 
-[tool.setuptools.package-data]
-qwen_tts = ["py.typed", "**/*.npz"]
+[tool.uv.sources]
+torch = [
+  { index = "pytorch-cu128", marker = "sys_platform != 'darwin'" },
+]
+torchaudio = [
+  { index = "pytorch-cu128", marker = "sys_platform != 'darwin'" },
+]
+
+[[tool.uv.index]]
+name = "pytorch-cu128"
+url = "https://download.pytorch.org/whl/cu128"
+explicit = true

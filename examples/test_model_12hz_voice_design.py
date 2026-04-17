@@ -28,7 +28,8 @@ def main():
         MODEL_PATH,
         device_map=device,
         dtype=torch.bfloat16,
-        attn_implementation="flash_attention_2",
+        # attn_implementation="flash_attention_2",
+        attn_implementation="eager",
     )
 
     # -------- Single --------
