@@ -37,3 +37,9 @@ uv.lock
 
 # Test outputs
 qwen3_tts_test_voice_clone_output_wav/
+test/
+output/
+
+# Custom data (audio and generated jsonl only; scripts are tracked)
+custom_data/**/*.wav
+custom_data/**/*.jsonl

@@ -17,6 +17,7 @@ import argparse
 import json
 import os
 import shutil
+import time
 
 import torch
 from accelerate import Accelerator
@@ -25,6 +26,7 @@ from qwen_tts.inference.qwen3_tts_model import Qwen3TTSModel
 from safetensors.torch import save_file
 from torch.optim import AdamW
 from torch.utils.data import DataLoader
+from torch.utils.tensorboard import SummaryWriter
 from transformers import AutoConfig
 
 target_speaker_embedding = None
@@ -39,19 +41,25 @@ def train():
     parser.add_argument("--lr", type=float, default=2e-5)
     parser.add_argument("--num_epochs", type=int, default=3)
     parser.add_argument("--speaker_name", type=str, default="speaker_test")
+    parser.add_argument("--save_epochs", type=int, nargs="+", default=[5],
+                        help="Epochs to save (1-indexed). Default: 5.")
     args = parser.parse_args()
 
-    accelerator = Accelerator(gradient_accumulation_steps=4, mixed_precision="bf16", log_with="tensorboard")
+    save_epochs_set = set(args.save_epochs) if args.save_epochs else None
+
+    accelerator = Accelerator(gradient_accumulation_steps=4, mixed_precision="bf16")
 
     MODEL_PATH = args.init_model_path
 
     qwen3tts = Qwen3TTSModel.from_pretrained(
         MODEL_PATH,
         torch_dtype=torch.bfloat16,
-        attn_implementation="flash_attention_2",
+        # attn_implementation="flash_attention_2",
+        attn_implementation="eager",
     )
     config = AutoConfig.from_pretrained(MODEL_PATH)
 
+    # WARNING: encoding 미지정 (Windows 기본값 cp949). prepare_data.py 출력과 인코딩을 맞춰야 함.
     train_data = open(args.train_jsonl).readlines()
     train_data = [json.loads(line) for line in train_data]
     dataset = TTSDataset(train_data, qwen3tts.processor, config)
@@ -63,10 +71,14 @@ def train():
         qwen3tts.model, optimizer, train_dataloader
     )
 
+    writer = SummaryWriter(log_dir=os.path.join(args.output_model_path, "tensorboard"))
+
     num_epochs = args.num_epochs
+    global_step = 0
     model.train()
 
     for epoch in range(num_epochs):
+        step_start = time.time()
         for step, batch in enumerate(train_dataloader):
             with accelerator.accumulate(model):
 
@@ -120,10 +132,23 @@ def train():
                 optimizer.step()
                 optimizer.zero_grad()
 
-            if step % 10 == 0:
-                accelerator.print(f"Epoch {epoch} | Step {step} | Loss: {loss.item():.4f}")
+            elapsed = time.time() - step_start
+            step_start = time.time()
+            batch_len = int(batch['attention_mask'].sum(dim=1).max().item())
+            loss_val = loss.item()
+            sub_loss_val = sub_talker_loss.item()
 
-        if accelerator.is_main_process:
+            accelerator.print(
+                f"Epoch {epoch} | Step {step} | Loss: {loss_val:.4f} | SubLoss: {sub_loss_val:.4f}"
+                f" | BatchLen: {batch_len} | Elapsed: {elapsed:.2f}s"
+            )
+            if accelerator.is_main_process:
+                writer.add_scalar("loss/total", loss_val, global_step)
+                writer.add_scalar("loss/sub_talker", sub_loss_val, global_step)
+            global_step += 1
+
+        is_last_epoch = (epoch + 1 == num_epochs)
+        if accelerator.is_main_process and (save_epochs_set is None or (epoch + 1) in save_epochs_set or is_last_epoch):
             output_dir = os.path.join(args.output_model_path, f"checkpoint-epoch-{epoch}")
             shutil.copytree(MODEL_PATH, output_dir, dirs_exist_ok=True)
 
@@ -156,6 +181,9 @@ def train():
             state_dict['talker.model.codec_embedding.weight'][3000] = target_speaker_embedding[0].detach().to(weight.device).to(weight.dtype)
             save_path = os.path.join(output_dir, "model.safetensors")
             save_file(state_dict, save_path)
+
+    if accelerator.is_main_process:
+        writer.close()
 
 if __name__ == "__main__":
     train()

@@ -34,7 +34,7 @@ def main():
         device_map=args.device,
     )
 
-    total_lines = open(args.input_jsonl).readlines()
+    total_lines = open(args.input_jsonl, encoding="utf-8").readlines()
     total_lines = [json.loads(line.strip()) for line in total_lines]
 
     final_lines = []
@@ -63,7 +63,7 @@ def main():
 
     final_lines = [json.dumps(line, ensure_ascii=False) for line in final_lines]
 
-    with open(args.output_jsonl, 'w') as f:
+    with open(args.output_jsonl, 'w', encoding="utf-8") as f:
         for line in final_lines:
             f.writelines(line + '\n')
 
