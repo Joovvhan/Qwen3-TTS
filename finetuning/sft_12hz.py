@@ -21,6 +21,7 @@ import time
 
 import torch
 from accelerate import Accelerator
+from huggingface_hub import snapshot_download
 from dataset import TTSDataset
 from qwen_tts.inference.qwen3_tts_model import Qwen3TTSModel
 from safetensors.torch import save_file
@@ -28,6 +29,17 @@ from torch.optim import AdamW
 from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
 from transformers import AutoConfig
+
+def _copytree_resolve_symlinks(src, dst):
+    os.makedirs(dst, exist_ok=True)
+    for entry in os.scandir(src):
+        real_path = os.path.realpath(entry.path)
+        dest_path = os.path.join(dst, entry.name)
+        if os.path.isdir(real_path):
+            _copytree_resolve_symlinks(real_path, dest_path)
+        else:
+            shutil.copy2(real_path, dest_path)
+
 
 target_speaker_embedding = None
 def train():
@@ -41,15 +53,15 @@ def train():
     parser.add_argument("--lr", type=float, default=2e-5)
     parser.add_argument("--num_epochs", type=int, default=3)
     parser.add_argument("--speaker_name", type=str, default="speaker_test")
-    parser.add_argument("--save_epochs", type=int, nargs="+", default=[5],
-                        help="Epochs to save (1-indexed). Default: 5.")
+    parser.add_argument("--save_epochs", type=int, default=5,
+                        help="Save checkpoint every N epochs. Default: 5.")
     args = parser.parse_args()
-
-    save_epochs_set = set(args.save_epochs) if args.save_epochs else None
 
     accelerator = Accelerator(gradient_accumulation_steps=4, mixed_precision="bf16")
 
     MODEL_PATH = args.init_model_path
+    if not os.path.isdir(MODEL_PATH):
+        MODEL_PATH = snapshot_download(MODEL_PATH)
 
     qwen3tts = Qwen3TTSModel.from_pretrained(
         MODEL_PATH,
@@ -71,7 +83,8 @@ def train():
         qwen3tts.model, optimizer, train_dataloader
     )
 
-    writer = SummaryWriter(log_dir=os.path.join(args.output_model_path, "tensorboard"))
+    run_name = time.strftime("%Y%m%d_%H%M%S")
+    writer = SummaryWriter(log_dir=os.path.join(args.output_model_path, "tensorboard", run_name))
 
     num_epochs = args.num_epochs
     global_step = 0
@@ -148,9 +161,10 @@ def train():
             global_step += 1
 
         is_last_epoch = (epoch + 1 == num_epochs)
-        if accelerator.is_main_process and (save_epochs_set is None or (epoch + 1) in save_epochs_set or is_last_epoch):
+        is_first_epoch = (epoch == 0)  # 모델 저장 기능 정상 작동을 위해 첫 epoch에서 저장 테스트
+        if accelerator.is_main_process and ((epoch + 1) % args.save_epochs == 0 or is_last_epoch or is_first_epoch):
             output_dir = os.path.join(args.output_model_path, f"checkpoint-epoch-{epoch}")
-            shutil.copytree(MODEL_PATH, output_dir, dirs_exist_ok=True)
+            _copytree_resolve_symlinks(MODEL_PATH, output_dir)
 
             input_config_file = os.path.join(MODEL_PATH, "config.json")
             output_config_file = os.path.join(output_dir, "config.json")
@@ -159,10 +173,10 @@ def train():
             config_dict["tts_model_type"] = "custom_voice"
             talker_config = config_dict.get("talker_config", {})
             talker_config["spk_id"] = {
-                args.speaker_name: 3000
+                args.speaker_name.lower(): 3000
             }
             talker_config["spk_is_dialect"] = {
-                args.speaker_name: False
+                args.speaker_name.lower(): False
             }
             config_dict["talker_config"] = talker_config
 
