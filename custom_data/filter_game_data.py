@@ -5,6 +5,7 @@ game 포맷 데이터셋 (_converted.jsonl) 일괄 필터링.
 YSOYA21은 제외합니다.
 프로젝트 루트에서 실행: uv run python custom_data/filter_game_data.py
 """
+import argparse
 import json
 import os
 
@@ -14,7 +15,7 @@ _HERE = os.path.dirname(os.path.abspath(__file__))
 
 MIN_CHARS = 8
 MIN_AUDIO = 3.0
-MAX_AUDIO = 12.0
+MAX_AUDIO = 10.0
 
 
 def find_game_dirs(root: str) -> list[str]:
@@ -28,12 +29,9 @@ def find_game_dirs(root: str) -> list[str]:
     return result
 
 
-def filter_dataset(dataset_dir: str):
-    name = os.path.basename(dataset_dir)
-    jsonl_path = os.path.join(dataset_dir, f"{name}_converted.jsonl")
-
+def filter_jsonl(jsonl_path: str, name: str, label: str):
     if not os.path.exists(jsonl_path):
-        print(f"[{name}] SKIP — _converted.jsonl 없음")
+        print(f"[{name}] SKIP — {label} 없음")
         return
 
     with open(jsonl_path, encoding="utf-8") as f:
@@ -56,14 +54,26 @@ def filter_dataset(dataset_dir: str):
         for item in kept:
             f.write(json.dumps(item, ensure_ascii=False) + "\n")
 
-    print(f"[{name}] {len(items)} -> {len(kept)}  (removed: {removed})")
+    print(f"[{name}] {label}: {len(items)} -> {len(kept)}  (removed: {removed})")
+
+
+def filter_dataset(dataset_dir: str, apply_train: bool = False):
+    name = os.path.basename(dataset_dir)
+    filter_jsonl(os.path.join(dataset_dir, f"{name}_converted.jsonl"), name, "_converted.jsonl")
+    if apply_train:
+        filter_jsonl(os.path.join(dataset_dir, f"{name}_train.jsonl"), name, "_train.jsonl")
 
 
 def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--apply_train", action="store_true",
+                        help="_train.jsonl도 동일 조건으로 필터링합니다.")
+    args = parser.parse_args()
+
     dirs = find_game_dirs(_HERE)
     print(f"Filter: text >= {MIN_CHARS}chars  |  {MIN_AUDIO}s <= audio <= {MAX_AUDIO}s\n")
     for d in dirs:
-        filter_dataset(d)
+        filter_dataset(d, apply_train=args.apply_train)
     print("\n완료.")
 
 
