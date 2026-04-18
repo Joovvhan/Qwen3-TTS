@@ -71,8 +71,7 @@ def train():
     )
     config = AutoConfig.from_pretrained(MODEL_PATH)
 
-    # WARNING: encoding 미지정 (Windows 기본값 cp949). prepare_data.py 출력과 인코딩을 맞춰야 함.
-    train_data = open(args.train_jsonl).readlines()
+    train_data = open(args.train_jsonl, encoding="utf-8").readlines()
     train_data = [json.loads(line) for line in train_data]
     dataset = TTSDataset(train_data, qwen3tts.processor, config)
     train_dataloader = DataLoader(dataset, batch_size=args.batch_size, shuffle=True, collate_fn=dataset.collate_fn)

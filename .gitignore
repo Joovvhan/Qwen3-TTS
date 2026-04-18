@@ -43,3 +43,6 @@ output/
 # Custom data (audio and generated jsonl only; scripts are tracked)
 custom_data/**/*.wav
 custom_data/**/*.jsonl
+
+# Scripts containing dataset-specific names
+custom_data/train_all_game.py
