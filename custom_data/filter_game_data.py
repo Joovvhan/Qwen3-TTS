@@ -14,7 +14,7 @@ _HERE = os.path.dirname(os.path.abspath(__file__))
 
 MIN_CHARS = 8
 MIN_AUDIO = 3.0
-MAX_AUDIO = 15.0
+MAX_AUDIO = 12.0
 
 
 def find_game_dirs(root: str) -> list[str]:
